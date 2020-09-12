@@ -8,7 +8,7 @@ mod render;
 pub use self::render::*;
 use crate::cli;
 use crate::paths::{Paths, PathsBuilder};
-use crate::screen::Screen;
+use crate::screen::{Screen, TextureCache};
 use crate::sort::Sorter;
 use crate::ui::{self, Action, Mode, PanAction, ProcessAction, RotationDirection, ZoomAction};
 use core::cmp;
@@ -16,6 +16,7 @@ use fs_extra::file::copy;
 use fs_extra::file::move_file;
 use fs_extra::file::remove;
 use sdl2::rect::Rect;
+use sdl2::render::Texture;
 use sdl2::render::{Canvas, TextureCreator, TextureQuery};
 use sdl2::rwops::RWops;
 use sdl2::ttf::Sdl2TtfContext;
@@ -93,7 +94,7 @@ impl<'a> Program<'a> {
                 font,
                 mono_font,
                 last_index: None,
-                last_texture: None,
+                cache: TextureCache::new(),
                 dirty: false,
             },
             paths,
@@ -125,7 +126,7 @@ impl<'a> Program<'a> {
 
     // Calculates the scale required to fit large images to screen
     fn calculate_scale_for_fit(&self) -> f32 {
-        if let Some(tex) = self.screen.last_texture.as_ref() {
+        if let Some(tex) = self.screen.cache.last_texture.as_ref() {
             let query = tex.query();
             let (src_x, src_y) = (query.width, query.height);
             let target = self.screen.canvas.viewport();
@@ -264,7 +265,7 @@ impl<'a> Program<'a> {
     }
 
     fn calc_x_step(&self) -> f32 {
-        if let Some(tex) = self.screen.last_texture.as_ref() {
+        if let Some(tex) = self.screen.cache.last_texture.as_ref() {
             let src_w = tex.query().width;
             let dst_w = self.screen.canvas.viewport().width();
             let x_diff = (dst_w as f32 - (src_w as f32 * self.ui_state.scale)) / 2.0;
@@ -275,7 +276,7 @@ impl<'a> Program<'a> {
     }
 
     fn calc_y_step(&self) -> f32 {
-        if let Some(tex) = self.screen.last_texture.as_ref() {
+        if let Some(tex) = self.screen.cache.last_texture.as_ref() {
             let src_h = tex.query().height;
             let dst_h = self.screen.canvas.viewport().height();
             let y_diff = (dst_h as f32 - (src_h as f32 * self.ui_state.scale)) / 2.0;

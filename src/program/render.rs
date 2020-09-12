@@ -39,11 +39,11 @@ impl<'a> Program<'a> {
 
     fn render_image(&mut self, force_render: bool) -> Result<(), String> {
         self.set_image_texture(force_render)?;
-        match self.screen.last_texture {
+        match self.screen.cache.last_texture {
             Some(_) => (),
             None => return Ok(()),
         };
-        let tex = self.screen.last_texture.as_ref().unwrap();
+        let tex = self.screen.cache.last_texture.as_ref().unwrap();
         let query = tex.query();
         // Area to render other rectangle on
         let target = self.screen.canvas.viewport();
@@ -78,7 +78,7 @@ impl<'a> Program<'a> {
     /// Renders the image at the current index
     fn set_image_texture(&mut self, force_render: bool) -> Result<(), String> {
         if self.paths.index() == self.screen.last_index
-            && self.screen.last_texture.is_some()
+            && self.screen.cache.last_texture.is_some()
             && !self.screen.dirty
             && !force_render
         {
@@ -95,19 +95,17 @@ impl<'a> Program<'a> {
             None => return Ok(()),
         };
 
-        let texture = match self.screen.texture_creator.load_texture(current_imagepath) {
-            Ok(t) => {
-                self.screen.last_index = self.paths.index();
-                t
-            }
+        match self
+            .screen
+            .load_texture(current_imagepath, self.paths.index())
+        {
+            Ok(_) => {}
             Err(e) => {
                 eprintln!("Failed to render image {}", e);
                 return Ok(());
             }
-        };
+        }
 
-        // Set the default state for viewing of the image
-        self.screen.last_texture = Some(texture);
         self.screen.dirty = false;
         // fit to screen
         self.ui_state.scale = self.calculate_scale_for_fit();
