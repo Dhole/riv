@@ -22,6 +22,6 @@ winapi = {version = "0.3.7", features=["shellapi"]}
 dunce = "1.0"
 
 [dependencies.sdl2]
-version = "0.32"
+version = "0.34"
 default-features = false
 features = ["image", "ttf"]

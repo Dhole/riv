@@ -6,6 +6,8 @@ use sdl2::ttf::Font;
 use sdl2::video::{FullscreenType, WindowContext};
 use sdl2::Sdl;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::prelude::*;
 use std::path::PathBuf;
 use FullscreenType::*;
 
@@ -14,7 +16,8 @@ pub struct TextureCache<'a> {
     /// last_texture is the last image texture rendered
     pub last_texture: Option<sdl2::render::Texture<'a>>,
     /// cache TODO
-    pub cache: HashMap<usize, sdl2::render::Texture<'a>>,
+    // pub cache: HashMap<usize, sdl2::render::Texture<'a>>,
+    pub cache: HashMap<usize, Vec<u8>>,
 }
 
 impl<'a> TextureCache<'a> {
@@ -91,22 +94,37 @@ impl Screen<'_> {
         current_imagepath: &PathBuf,
         index: Option<usize>,
     ) -> Result<(), String> {
-        match self.cache.last_texture.take() {
-            Some(t) => {
-                self.cache.cache.insert(self.last_index.unwrap(), t);
-            }
-            None => {}
-        };
+        // match self.cache.last_texture.take() {
+        //     Some(t) => {
+        //         self.cache.cache.insert(self.last_index.unwrap(), t);
+        //     }
+        //     None => {}
+        // };
+        //
         let i = index.unwrap();
-        match self.cache.cache.remove(&i) {
-            Some(t) => {
-                self.cache.last_texture = Some(t);
-                self.last_index = index;
-                return Ok(());
+        let buf = match self.cache.cache.get(&i) {
+            Some(b) => {
+                b
+                // self.cache.last_texture = Some(t);
+                // self.last_index = index;
+                // return Ok(());
             }
-            None => {}
-        }
-        match self.texture_creator.load_texture(current_imagepath) {
+            None => {
+                let mut buf = Vec::new();
+                let mut f = match File::open(current_imagepath) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        return Err(format!("{}", e));
+                    }
+                };
+                if let Err(e) = f.read_to_end(&mut buf) {
+                    return Err(format!("{}", e));
+                }
+                self.cache.cache.insert(i, buf);
+                self.cache.cache.get(&i).unwrap()
+            }
+        };
+        match self.texture_creator.load_texture_bytes(&buf) {
             Ok(t) => {
                 self.cache.last_texture = Some(t);
                 self.last_index = index;
