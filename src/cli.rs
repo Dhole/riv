@@ -18,6 +18,8 @@ pub struct Args {
     pub sort_order: SortOrder,
     /// whether or not to reverse sorting
     pub reverse: bool,
+    /// Whether or not to make a random shuffle
+    pub shuffle: bool,
     /// maximum length of files to display
     pub max_length: usize,
     /// Start in fullscreen mode
@@ -61,6 +63,14 @@ pub fn cli() -> Result<Args, String> {
                 .short("r")
                 .long("reverse")
                 .help("Reverses the sorting of images")
+                .multiple(false)
+                .takes_value(false),
+        )
+        .arg(
+            Arg::with_name("shuffle")
+                .default_value("false")
+                .long("shuffle")
+                .help("Shufle the sorting of images")
                 .multiple(false)
                 .takes_value(false),
         )
@@ -118,6 +128,7 @@ pub fn cli() -> Result<Args, String> {
     };
 
     let reverse = matches.is_present("reverse");
+    let shuffle = matches.is_present("shuffle");
 
     let max_length = value_t!(matches, "max-number-images", usize).unwrap_or(0);
     let fullscreen = matches.is_present("fullscreen");
@@ -127,6 +138,7 @@ pub fn cli() -> Result<Args, String> {
         dest_folder,
         sort_order,
         reverse,
+        shuffle,
         max_length,
         fullscreen,
         base_dir,

@@ -8,6 +8,8 @@
 
 use core::cmp::Ordering;
 use fs_extra::dir::get_size;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -20,14 +22,17 @@ pub struct Sorter {
     sort_order: SortOrder,
     /// Whether or not to reverse the order of sorting
     reverse: bool,
+    /// Whether or not to make a random shuffle
+    shuffle: bool,
 }
 
 impl Sorter {
     /// Create sorter with command line arguments SortOrder and reverse
-    pub fn new(sort_order: SortOrder, reverse: bool) -> Self {
+    pub fn new(sort_order: SortOrder, reverse: bool, shuffle: bool) -> Self {
         Self {
             sort_order,
             reverse,
+            shuffle,
         }
     }
 
@@ -43,9 +48,14 @@ impl Sorter {
 
     /// Sorts the images based on sort_order, reverses if necessary
     pub fn sort<'a>(&self, paths: &'a mut [PathBuf]) -> &'a mut [PathBuf] {
-        paths.sort_by(|a, b| self.sort_order.file_compare(&a, &b));
-        if self.reverse {
-            paths.reverse();
+        if self.shuffle {
+            let mut rng = thread_rng();
+            paths.shuffle(&mut rng);
+        } else {
+            paths.sort_by(|a, b| self.sort_order.file_compare(&a, &b));
+            if self.reverse {
+                paths.reverse();
+            }
         }
         paths
     }

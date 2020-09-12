@@ -53,13 +53,14 @@ impl<'a> Program<'a> {
         let mut images = args.files;
         let dest_folder = args.dest_folder;
         let reverse = args.reverse;
+        let shuffle = args.shuffle;
         let sort_order = args.sort_order;
         let max_length = args.max_length;
         let base_dir = args.base_dir;
 
         let max_viewable = max_length;
 
-        let sorter = Sorter::new(sort_order, reverse);
+        let sorter = Sorter::new(sort_order, reverse, shuffle);
         sorter.sort(&mut images);
 
         let font_bytes = include_bytes!("../../resources/Roboto-Medium.ttf");
