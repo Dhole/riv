@@ -6,6 +6,8 @@ use crate::sort::SortOrder;
 use clap::{App, Arg};
 use glob::glob;
 use std::env::current_dir;
+use std::fs::File;
+use std::io::{prelude::*, BufReader};
 use std::path::PathBuf;
 
 /// Args contains the arguments that have been successfully parsed by the clap cli app
@@ -58,6 +60,15 @@ pub fn cli() -> Result<Args, String> {
                 .help("Sort order for images"),
         )
         .arg(
+            Arg::from_usage("<list-file> 'Text file with the list of images'")
+                .required(false)
+                .short("l")
+                .long("list-file")
+                .takes_value(true)
+                .case_insensitive(true)
+                .help("Load images from a list in a text file"),
+        )
+        .arg(
             Arg::with_name("reverse")
                 .default_value("false")
                 .short("r")
@@ -92,27 +103,50 @@ pub fn cli() -> Result<Args, String> {
         )
         .get_matches();
 
-    let path_glob = match matches.value_of("paths") {
-        Some(v) => v,
-        None => panic!("No value for paths!"),
-    };
     // find current directory so glob provided can be relative
     let mut base_dir = match current_dir() {
         Ok(c) => c,
         Err(_) => PathBuf::new(),
     };
-    let path_glob = crate::path_to_glob(&base_dir, path_glob)?;
-    // find new base directory
-    if let Ok(new_base_dir) = crate::new_base_dir(&path_glob) {
-        base_dir = new_base_dir;
-    }
-    let glob_matches = glob(&path_glob.to_string_lossy()).map_err(|e| e.to_string())?;
-    for path in glob_matches {
-        match path {
-            Ok(p) => push_image_path(&mut files, p),
-            Err(e) => eprintln!("Path not processable {}", e),
+
+    match matches.value_of("list-file") {
+        Some(list_file_path) => {
+            let file = match File::open(list_file_path) {
+                Ok(f) => f,
+                Err(e) => return Err(format!("Error opening file-list: {}", e)),
+            };
+            let reader = BufReader::new(file);
+
+            for line in reader.lines() {
+                match line {
+                    Ok(p) => {
+                        if !p.starts_with("#") {
+                            push_image_path(&mut files, PathBuf::from(p));
+                        }
+                    }
+                    Err(e) => return Err(format!("Error opening file-list: {}", e)),
+                }
+            }
         }
-    }
+        None => {
+            let path_glob = match matches.value_of("paths") {
+                Some(v) => v,
+                None => panic!("No value for paths!"),
+            };
+            let path_glob = crate::path_to_glob(&base_dir, path_glob)?;
+            // find new base directory
+            if let Ok(new_base_dir) = crate::new_base_dir(&path_glob) {
+                base_dir = new_base_dir;
+            }
+            let glob_matches = glob(&path_glob.to_string_lossy()).map_err(|e| e.to_string())?;
+            for path in glob_matches {
+                match path {
+                    Ok(p) => push_image_path(&mut files, p),
+                    Err(e) => eprintln!("Path not processable {}", e),
+                }
+            }
+        }
+    };
 
     let sort_order = match value_t!(matches, "sort-order", SortOrder) {
         Ok(order) => order,
