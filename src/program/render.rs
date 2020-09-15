@@ -194,7 +194,7 @@ impl<'a> Program<'a> {
         let text = match self.ui_state.render_help {
             HelpRender::None => return Ok(()),
             HelpRender::Normal => normal_help_text(),
-            HelpRender::Command => command_help_text(),
+            // HelpRender::Command => command_help_text(),
         };
         let total_height = LINE_HEIGHT * text.len() as i32 + LINE_PADDING * (text.len() as i32 - 1);
         let mut y = (self.screen.canvas.viewport().height() as f32 / 2.0
@@ -313,11 +313,11 @@ fn mode_colors(m: &Mode) -> Colors {
             secondary: green(),
             tertiary: grey(),
         },
-        Mode::Command(_) => Colors {
-            primary: light_yellow(),
-            secondary: yellow(),
-            tertiary: grey(),
-        },
+        // Mode::Command(_) => Colors {
+        //     primary: light_yellow(),
+        //     secondary: yellow(),
+        //     tertiary: grey(),
+        // },
         Mode::Exit => Colors {
             primary: light_blue(),
             secondary: blue(),
@@ -328,9 +328,8 @@ fn mode_colors(m: &Mode) -> Colors {
 
 fn mode_text_color(m: &Mode) -> Color {
     match m {
-        Mode::Normal | Mode::MultiNormal | Mode::Exit | Mode::Command(_) | Mode::Success(_) => {
-            dark_text_color()
-        }
+        // Mode::Normal | Mode::MultiNormal | Mode::Exit | Mode::Command(_) | Mode::Success(_) => {
+        Mode::Normal | Mode::MultiNormal | Mode::Exit | Mode::Success(_) => dark_text_color(),
         Mode::Error(_) => light_text_color(),
     }
 }

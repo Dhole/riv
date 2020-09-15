@@ -17,8 +17,8 @@ pub enum Action<'a> {
     /// ReRender indicates the app should re-render in response to this event (such as a window
     /// resize)
     ReRender,
-    /// Switches modes from normal to command mode to enter queries such as "newglob"/"ng"
-    SwitchCommandMode,
+    // /// Switches modes from normal to command mode to enter queries such as "newglob"/"ng"
+    // SwitchCommandMode,
     /// Indicates user hit the backspace, program input should be truncated accordingly
     Backspace,
     /// User entered input from the keyboard
@@ -64,6 +64,14 @@ pub enum Action<'a> {
     Trash,
     /// Noop indicates the app should not respond to this event
     Noop,
+    /// Doc TODO
+    RepeatLastAction,
+    /// Doc TODO
+    ToggleInfobar,
+    /// Doc TODO
+    ToggleHelp,
+    /// Doc TODO
+    Digit(usize),
 }
 
 /// Direction to rotate image
@@ -185,9 +193,9 @@ pub enum Mode {
     /// Normal mode is switched to receiving the amount of times to perform
     /// the same action
     MultiNormal,
-    /// Mode that is built off of user input, allows switching the current glob
-    /// string is the input to display on the infobar
-    Command(String),
+    // /// Mode that is built off of user input, allows switching the current glob
+    // /// string is the input to display on the infobar
+    // Command(String),
     /// Mode that is meant to display errors to the user through the infobar
     /// string is the input to display on the infobar
     Error(String),
@@ -204,8 +212,8 @@ pub enum HelpRender {
     None,
     /// Should render normal mode help
     Normal,
-    /// Should render command mode help
-    Command,
+    // /// Should render command mode help
+    // Command,
 }
 
 /// Storage for state across functions
@@ -342,166 +350,50 @@ impl<'a> State<'a> {
     }
 }
 
-/// Process SDL2 events while getting number of times to repeat action
-pub fn process_multi_normal_mode<'a>(
-    state: &mut State<'a>,
-    event: &Event,
-) -> MultiNormalAction<'a> {
-    use sdl2::event::WindowEvent::*;
-    use sdl2::keyboard::Keycode::*;
-
-    let times = state.register.cur_action.times;
-    match event {
-        Event::Quit { .. } => MultiNormalAction::Quit,
-
-        Event::TextInput { text, .. } => match text.as_str() {
-            // Number of times to repeat operation
-            "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
-                let previous_count = state.register.cur_action.times;
-                // Safe to unwrap as only digits were matched
-                let next_digit = text.parse::<usize>().unwrap();
-                // Cap at highest possible value if overflow would occur
-                let new_count = (previous_count.saturating_mul(10)).saturating_add(next_digit);
-                // Save new count
-                state.register.cur_action.times = new_count;
-                MultiNormalAction::MoreInput
-            }
-            "c" => (Action::Copy, times).into(),
-            "d" => (Action::Trash, times).into(),
-            "D" => (Action::Delete, times).into(),
-            "f" => (Action::ToggleFullscreen, times).into(),
-            "g" => (Action::First, times).into(),
-            "G" => (Action::Last, times).into(),
-            "h" => (Action::FlipHorizontal, times).into(),
-            "?" => {
-                match state.render_help {
-                    HelpRender::Normal => state.render_help = HelpRender::None,
-                    _ => state.render_help = HelpRender::Normal,
-                }
-                (Action::ReRender, times).into()
-            }
-            "H" => (Action::Pan(PanAction::Left), times).into(),
-            "i" => (Action::Zoom(ZoomAction::In), times).into(),
-            "j" => (Action::Next, times).into(),
-            "J" => (Action::Pan(PanAction::Down), times).into(),
-            "k" => (Action::Prev, times).into(),
-            "K" => (Action::Pan(PanAction::Up), times).into(),
-            "L" => (Action::Pan(PanAction::Right), times).into(),
-            "m" => (Action::Move, times).into(),
-            "o" => (Action::Zoom(ZoomAction::Out), times).into(),
-            "q" => MultiNormalAction::Quit,
-            "r" => (Action::Rotate(RotationDirection::Clockwise), times).into(),
-            "R" => (Action::Rotate(RotationDirection::CounterClockwise), times).into(),
-
-            "t" => {
-                state.render_infobar = !state.render_infobar;
-                (Action::ReRender, times).into()
-            }
-            "v" => (Action::FlipVertical, times).into(),
-            "w" => (Action::SkipForward, times).into(),
-            "b" => (Action::SkipBack, times).into(),
-            "z" => (Action::ToggleFit, times).into(),
-            "Z" => (Action::CenterImage, times).into(),
-            _ => MultiNormalAction::Noop,
-        },
-
-        Event::KeyDown {
-            keycode: Some(k),
-            keymod: m,
-            ..
-        } => match (k, m) {
-            (k, &Mod::LSHIFTMOD) | (k, &Mod::RSHIFTMOD) => match k {
-                Left => (Action::Pan(PanAction::Left), times).into(),
-                Right => (Action::Pan(PanAction::Right), times).into(),
-                Up => (Action::Pan(PanAction::Up), times).into(),
-                Down => (Action::Pan(PanAction::Down), times).into(),
-                _ => MultiNormalAction::Noop,
-            },
-            (k, &Mod::NOMOD) | (k, _) => match k {
-                Delete => (Action::Delete, times).into(),
-                Escape => MultiNormalAction::Cancel,
-                PageUp => (Action::SkipForward, times).into(),
-                PageDown => (Action::SkipBack, times).into(),
-                Period => {
-                    // Replace times of last action with new
-                    state.last_action.times = times;
-                    state.last_action.clone().into()
-                }
-                Right => (Action::Next, times).into(),
-                Left => (Action::Prev, times).into(),
-                Up => (Action::Zoom(ZoomAction::In), times).into(),
-                Down => (Action::Zoom(ZoomAction::Out), times).into(),
-                Backspace => (Action::Backspace, 1).into(),
-                _ => MultiNormalAction::Noop,
-            },
-        },
-
-        Event::Window { win_event, .. } => match win_event {
-            // Exposed: Rerender if the window was not changed by us.
-            Exposed | Resized(..) | SizeChanged(..) | Maximized => MultiNormalAction::ReRender,
-            _ => MultiNormalAction::Noop,
-        },
-
-        _ => MultiNormalAction::Noop,
-    }
-}
-
-/// event_action returns which action should be performed in response to this event
-pub fn process_normal_mode<'a>(state: &mut State<'a>, event: &Event) -> ProcessAction<'a> {
+fn event_to_action<'a>(event: &Event) -> Action<'a> {
     // Bring variants in function namespace for reduced typing.
     use sdl2::event::WindowEvent::*;
     use sdl2::keyboard::Keycode::*;
 
     match event {
-        Event::Quit { .. } => Action::Quit.into(),
+        Event::Quit { .. } => Action::Quit,
 
         Event::TextInput { text, .. } => match text.as_str() {
             // Number of times to repeat operation
             // 0 is not captured for first digit as it does not impact counts
             "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
                 // Safe to unwrap as only digits were matched
-                let first_digit = text.parse::<usize>().unwrap();
-                // Save the first digit before switching
-                state.register.cur_action.times = first_digit;
-                Action::SwitchMultiNormalMode.into()
+                let digit = text.parse::<usize>().unwrap();
+                Action::Digit(digit)
             }
-            "c" => Action::Copy.into(),
-            "d" => Action::Trash.into(),
-            "D" => Action::Delete.into(),
-            "f" => Action::ToggleFullscreen.into(),
-            "g" => Action::First.into(),
-            "G" => Action::Last.into(),
-            "h" => Action::FlipHorizontal.into(),
-            "?" => {
-                match state.render_help {
-                    HelpRender::Normal => state.render_help = HelpRender::None,
-                    _ => state.render_help = HelpRender::Normal,
-                }
-                Action::ReRender.into()
-            }
-            "H" => Action::Pan(PanAction::Left).into(),
-            "i" => Action::Zoom(ZoomAction::In).into(),
-            "j" => Action::Next.into(),
-            "J" => Action::Pan(PanAction::Down).into(),
-            "k" => Action::Prev.into(),
-            "K" => Action::Pan(PanAction::Up).into(),
-            "L" => Action::Pan(PanAction::Right).into(),
-            "m" => Action::Move.into(),
-            "o" => Action::Zoom(ZoomAction::Out).into(),
-            "q" => Action::Quit.into(),
-            "r" => Action::Rotate(RotationDirection::Clockwise).into(),
-            "R" => Action::Rotate(RotationDirection::CounterClockwise).into(),
-            "t" => {
-                state.render_infobar = !state.render_infobar;
-                Action::ReRender.into()
-            }
-            "v" => Action::FlipVertical.into(),
-            "w" => Action::SkipForward.into(),
-            "b" => Action::SkipBack.into(),
-            "z" => Action::ToggleFit.into(),
-            "Z" => Action::CenterImage.into(),
-            ":" => Action::SwitchCommandMode.into(),
-            _ => Action::Noop.into(),
+            "c" => Action::Copy,
+            "d" => Action::Trash,
+            "D" => Action::Delete,
+            "f" => Action::ToggleFullscreen,
+            "g" => Action::First,
+            "G" => Action::Last,
+            "h" => Action::FlipHorizontal,
+            "?" => Action::ToggleHelp,
+            "H" => Action::Pan(PanAction::Left),
+            "i" => Action::Zoom(ZoomAction::In),
+            "j" => Action::Next,
+            "J" => Action::Pan(PanAction::Down),
+            "k" => Action::Prev,
+            "K" => Action::Pan(PanAction::Up),
+            "L" => Action::Pan(PanAction::Right),
+            "m" => Action::Move,
+            "o" => Action::Zoom(ZoomAction::Out),
+            "q" => Action::Quit,
+            "r" => Action::Rotate(RotationDirection::Clockwise),
+            "R" => Action::Rotate(RotationDirection::CounterClockwise),
+            "t" => Action::ToggleInfobar,
+            "v" => Action::FlipVertical,
+            "w" => Action::SkipForward,
+            "b" => Action::SkipBack,
+            "z" => Action::ToggleFit,
+            "Z" => Action::CenterImage,
+            // ":" => Action::SwitchCommandMode.into(),
+            _ => Action::Noop,
         },
 
         Event::KeyDown {
@@ -510,72 +402,127 @@ pub fn process_normal_mode<'a>(state: &mut State<'a>, event: &Event) -> ProcessA
             ..
         } => match (k, m) {
             (k, &Mod::LSHIFTMOD) | (k, &Mod::RSHIFTMOD) => match k {
-                Left => Action::Pan(PanAction::Left).into(),
-                Right => Action::Pan(PanAction::Right).into(),
-                Up => Action::Pan(PanAction::Up).into(),
-                Down => Action::Pan(PanAction::Down).into(),
-                _ => Action::Noop.into(),
+                Left => Action::Pan(PanAction::Left),
+                Right => Action::Pan(PanAction::Right),
+                Up => Action::Pan(PanAction::Up),
+                Down => Action::Pan(PanAction::Down),
+                _ => Action::Noop,
             },
             (k, &Mod::NOMOD) | (k, _) => match k {
-                Delete => Action::Delete.into(),
-                F11 => Action::ToggleFullscreen.into(),
-                Escape => Action::Quit.into(),
-                PageUp => Action::SkipForward.into(),
-                PageDown => Action::SkipBack.into(),
-                Home => Action::First.into(),
-                End => Action::Last.into(),
-                Period => state.last_action.clone(),
-                Right => Action::Next.into(),
-                Left => Action::Prev.into(),
-                Up => Action::Zoom(ZoomAction::In).into(),
-                Down => Action::Zoom(ZoomAction::Out).into(),
-                _ => Action::Noop.into(),
+                Delete => Action::Delete,
+                F11 => Action::ToggleFullscreen,
+                Escape => Action::Quit,
+                PageUp => Action::SkipForward,
+                PageDown => Action::SkipBack,
+                Home => Action::First,
+                End => Action::Last,
+                Period => Action::RepeatLastAction,
+                Right => Action::Next,
+                Left => Action::Prev,
+                Up => Action::Zoom(ZoomAction::In),
+                Down => Action::Zoom(ZoomAction::Out),
+                Backspace => Action::Backspace,
+                _ => Action::Noop,
             },
         },
 
         Event::Window { win_event, .. } => match win_event {
             // Exposed: Rerender if the window was not changed by us.
-            Exposed | Resized(..) | SizeChanged(..) | Maximized => Action::ReRender.into(),
-            _ => Action::Noop.into(),
+            Exposed | Resized(..) | SizeChanged(..) | Maximized => Action::ReRender,
+            _ => Action::Noop,
         },
 
         Event::MouseButtonUp { mouse_btn: btn, .. } => match btn {
-            MouseButton::Left => Action::ToggleFit.into(),
-            _ => Action::Noop.into(),
-        },
-        _ => Action::Noop.into(),
-    }
-}
-
-/// Processes event information for Command mode, and returns them as Actions
-pub fn process_command_mode(event: &Event) -> Action {
-    use sdl2::event::WindowEvent;
-    use sdl2::keyboard::Keycode;
-
-    match event {
-        Event::TextInput { text, .. } => Action::KeyboardInput(text),
-        // Handle backspace, escape, and returns
-        Event::KeyDown {
-            keycode: Some(code),
-            ..
-        } => match code {
-            Keycode::Backspace => Action::Backspace,
-            Keycode::Escape => Action::SwitchNormalMode,
-            // User is done entering input
-            Keycode::Return | Keycode::Return2 | Keycode::KpEnter => Action::SwitchNormalMode,
-            _ => Action::Noop,
-        },
-        Event::Window { win_event, .. } => match win_event {
-            // Exposed: Rerender if the window was not changed by us.
-            WindowEvent::Exposed
-            | WindowEvent::Resized(..)
-            | WindowEvent::SizeChanged(..)
-            | WindowEvent::Maximized => Action::ReRender,
+            MouseButton::Left => Action::ToggleFit,
             _ => Action::Noop,
         },
         _ => Action::Noop,
     }
 }
+
+/// Process SDL2 events while getting number of times to repeat action
+pub fn process_multi_normal_mode<'a>(
+    state: &mut State<'a>,
+    event: &Event,
+) -> MultiNormalAction<'a> {
+    let times = state.register.cur_action.times;
+    let action = event_to_action(event);
+    match action {
+        Action::Digit(next_digit) => {
+            let previous_count = state.register.cur_action.times;
+            // Cap at highest possible value if overflow would occur
+            let new_count = (previous_count.saturating_mul(10)).saturating_add(next_digit);
+            // Save new count
+            state.register.cur_action.times = new_count;
+            MultiNormalAction::MoreInput
+        }
+        Action::Quit => MultiNormalAction::Quit,
+        Action::RepeatLastAction => {
+            // Replace times of last action with new
+            state.last_action.times = times;
+            state.last_action.clone().into()
+        }
+        Action::Noop => MultiNormalAction::Noop,
+        Action::ReRender => MultiNormalAction::ReRender,
+        _ => (action, times).into(),
+    }
+}
+
+/// event_action returns which action should be performed in response to this event
+pub fn process_normal_mode<'a>(state: &mut State<'a>, event: &Event) -> ProcessAction<'a> {
+    let action = event_to_action(event);
+    match action {
+        Action::Digit(first_digit) => {
+            // Save the first digit before switching
+            state.register.cur_action.times = first_digit;
+            Action::SwitchMultiNormalMode.into()
+        }
+        Action::ToggleHelp => {
+            match state.render_help {
+                HelpRender::Normal => state.render_help = HelpRender::None,
+                _ => state.render_help = HelpRender::Normal,
+            }
+            Action::ReRender.into()
+        }
+        Action::ToggleInfobar => {
+            state.render_infobar = !state.render_infobar;
+            Action::ReRender.into()
+        }
+        Action::RepeatLastAction => state.last_action.clone().into(),
+        Action::Backspace => Action::Noop.into(),
+        _ => action.into(),
+    }
+}
+
+// /// Processes event information for Command mode, and returns them as Actions
+// pub fn process_command_mode(event: &Event) -> Action {
+//     use sdl2::event::WindowEvent;
+//     use sdl2::keyboard::Keycode;
+//
+//     match event {
+//         Event::TextInput { text, .. } => Action::KeyboardInput(text),
+//         // Handle backspace, escape, and returns
+//         Event::KeyDown {
+//             keycode: Some(code),
+//             ..
+//         } => match code {
+//             Keycode::Backspace => Action::Backspace,
+//             Keycode::Escape => Action::SwitchNormalMode,
+//             // User is done entering input
+//             Keycode::Return | Keycode::Return2 | Keycode::KpEnter => Action::SwitchNormalMode,
+//             _ => Action::Noop,
+//         },
+//         Event::Window { win_event, .. } => match win_event {
+//             // Exposed: Rerender if the window was not changed by us.
+//             WindowEvent::Exposed
+//             | WindowEvent::Resized(..)
+//             | WindowEvent::SizeChanged(..)
+//             | WindowEvent::Maximized => Action::ReRender,
+//             _ => Action::Noop,
+//         },
+//         _ => Action::Noop,
+//     }
+// }
 
 /// Set zoom times to 1 if times is too big for i32 value or times is 0
 fn cap_zoom_times(times: usize) -> i32 {

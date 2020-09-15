@@ -28,7 +28,7 @@ impl Text {
     ///     information = error message to display
     pub fn update(current_mode: &Mode, paths: &Paths, state: &State) -> Self {
         let (mode, information) = match current_mode {
-            Mode::Command(msg) => ("Command".to_string(), format!(":{}", msg)),
+            // Mode::Command(msg) => ("Command".to_string(), format!(":{}", msg)),
             Mode::Normal => {
                 let information = match paths.current_image_path() {
                     Some(path) => match path.to_str() {

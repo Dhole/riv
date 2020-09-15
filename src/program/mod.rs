@@ -27,6 +27,7 @@ use sdl2::Sdl;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::thread;
 use std::time::{Duration, Instant};
 
 const FONT_SIZE: u16 = 18;
@@ -578,6 +579,9 @@ impl<'a> Program<'a> {
     /// Switches modes allowing events to be interpreted in different ways
     pub fn run(&mut self) -> Result<(), String> {
         self.render_screen(false)?;
+        let child = thread::spawn(move || {
+            // some work here
+        });
         'main_loop: loop {
             let mode = &self.ui_state.mode.clone();
             match mode {
@@ -589,11 +593,11 @@ impl<'a> Program<'a> {
                 Mode::MultiNormal => {
                     self.run_multi_normal_mode()?;
                 }
-                Mode::Command(..) => {
-                    self.run_command_mode()?;
-                    // Force renders in order to remove "Command" and other info from bar
-                    self.render_screen(true)?;
-                }
+                // Mode::Command(..) => {
+                //     self.run_command_mode()?;
+                //     // Force renders in order to remove "Command" and other info from bar
+                //     self.render_screen(true)?;
+                // }
                 Mode::Error(..) => {
                     self.render_screen(false)?;
                     self.ui_state.mode = Mode::Normal;
@@ -605,7 +609,7 @@ impl<'a> Program<'a> {
                 Mode::Exit => break 'main_loop,
             }
         }
-        Ok(())
+        child.join().map_err(|e| format!("{:?}", e))
     }
 
     /// Mode to input how many times to repeat a normal mode action
@@ -689,10 +693,10 @@ impl<'a> Program<'a> {
                     self.render_screen(false)?
                 }
                 Action::ReRender => self.render_screen(false)?,
-                Action::SwitchCommandMode => {
-                    self.ui_state.mode = Mode::Command(String::new());
-                    return Ok(CompleteType::Break);
-                }
+                // Action::SwitchCommandMode => {
+                //     self.ui_state.mode = Mode::Command(String::new());
+                //     return Ok(CompleteType::Break);
+                // }
                 Action::SwitchMultiNormalMode => {
                     self.ui_state.mode = Mode::MultiNormal;
                     return Ok(CompleteType::Break);
