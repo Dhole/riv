@@ -1,7 +1,10 @@
 //! Screen contains the Screen struct which contains all SDL initialised data required
 //! for building the window and rendering to screen.
-use sdl2::image::LoadTexture;
-use sdl2::render::{TextureCreator, WindowCanvas};
+use sdl2::image::{LoadSurface, LoadTexture};
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::rect::Rect;
+use sdl2::render::{TextureAccess, TextureCreator, WindowCanvas};
+use sdl2::surface::Surface;
 use sdl2::ttf::Font;
 use sdl2::video::{FullscreenType, WindowContext};
 use sdl2::Sdl;
@@ -11,13 +14,15 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 use FullscreenType::*;
 
+use std::time::Instant;
+
 /// TextureCache caches past and future textures.
 pub struct TextureCache<'a> {
     /// last_texture is the last image texture rendered
     pub last_texture: Option<sdl2::render::Texture<'a>>,
     /// cache TODO
     // pub cache: HashMap<usize, sdl2::render::Texture<'a>>,
-    pub cache: HashMap<usize, Vec<u8>>,
+    pub cache: HashMap<usize, Surface<'a>>,
 }
 
 impl<'a> TextureCache<'a> {
@@ -94,45 +99,131 @@ impl Screen<'_> {
         current_imagepath: &PathBuf,
         index: Option<usize>,
     ) -> Result<(), String> {
-        // match self.cache.last_texture.take() {
-        //     Some(t) => {
-        //         self.cache.cache.insert(self.last_index.unwrap(), t);
-        //     }
-        //     None => {}
-        // };
-        //
+        //match self.cache.last_texture.take() {
+        //    Some(t) => {
+        //        self.cache.cache.insert(self.last_index.unwrap(), t);
+        //    }
+        //    None => {}
+        //};
+
         let i = index.unwrap();
-        let buf = match self.cache.cache.get(&i) {
-            Some(b) => {
-                b
+        let surface = match self.cache.cache.get(&i) {
+            Some(s) => {
+                s
                 // self.cache.last_texture = Some(t);
                 // self.last_index = index;
                 // return Ok(());
             }
             None => {
-                let mut buf = Vec::new();
-                let mut f = match File::open(current_imagepath) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        return Err(format!("{}", e));
-                    }
+                let start = Instant::now();
+                let s = match Surface::from_file(current_imagepath) {
+                    Ok(s) => s,
+                    Err(e) => return Err(e),
                 };
-                if let Err(e) = f.read_to_end(&mut buf) {
-                    return Err(format!("{}", e));
-                }
-                self.cache.cache.insert(i, buf);
+                println!("Surface::from_file(): {} ms", start.elapsed().as_millis());
+                let start = Instant::now();
+                let s = s.convert_format(PixelFormatEnum::RGB888).unwrap();
+                println!(
+                    "Surface.convert_format(): {} ms",
+                    start.elapsed().as_millis()
+                );
+
+                self.cache.cache.insert(i, s);
                 self.cache.cache.get(&i).unwrap()
             }
         };
-        match self.texture_creator.load_texture_bytes(&buf) {
-            Ok(t) => {
-                self.cache.last_texture = Some(t);
-                self.last_index = index;
-                return Ok(());
+        let (width, height) = surface.size();
+        let pitch = surface.pitch();
+        let pixels = surface.without_lock().unwrap();
+        let mut v = Vec::new();
+        for _ in 0..8 {
+            let start = Instant::now();
+            let mut texture = self
+                .texture_creator
+                // .create_texture(None, TextureAccess::Static, width, height)
+                .create_texture(
+                    Some(PixelFormatEnum::RGB888),
+                    TextureAccess::Streaming,
+                    width,
+                    height,
+                )
+                .unwrap();
+            // println!(
+            //     "\n> TextureCreator.create_texture(): {} ms",
+            //     start.elapsed().as_millis()
+            // );
+            // println!("texture query {:?}", texture.query());
+            // println!("{} x {}", width, height);
+            // let start = Instant::now();
+            // println!("empty: {} ms", start.elapsed().as_millis());
+
+            let start = Instant::now();
+            texture
+                .update(Rect::new(0, 0, 0, 0), pixels, 1 as usize)
+                .unwrap();
+            // texture.with_lock(Rect::new(0, 0, 0, 0), |_, _| {}).unwrap();
+            println!(
+                "> Texture.update(): >>>>>> {} ms <<<<<<<",
+                start.elapsed().as_millis()
+            );
+            v.push(texture);
+        }
+        let mut texture = v.pop().unwrap();
+        let pixels_len = width * height;
+        const TRANS_LEN: u32 = 1024 * 1024;
+        let chunks = std::cmp::max(1, pixels_len / TRANS_LEN);
+        let lines = height / chunks;
+        for i in 0..chunks {
+            let start = Instant::now();
+            let rect = Rect::new(0, (lines * i) as i32, width, lines);
+            let pixels = &pixels[((lines * i) * width * 4) as usize
+                ..std::cmp::min(pixels.len() - 1, ((lines * (i + 1)) * width * 4) as usize)];
+            match texture.update(rect, pixels, pitch as usize) {
+                Ok(_) => {
+                    println!(
+                        "Texture.update(): {} ms (rect: {:?}, len: {})",
+                        start.elapsed().as_millis(),
+                        rect,
+                        pixels.len()
+                    );
+                }
+                Err(e) => {
+                    return Err(format!("{}", e));
+                }
             }
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        }
+        // println!("");
+        // let mut texture = self
+        //     .texture_creator
+        //     // .create_texture(None, TextureAccess::Static, width, height)
+        //     .create_texture(
+        //         Some(PixelFormatEnum::RGB888),
+        //         TextureAccess::Static,
+        //         width,
+        //         height,
+        //     )
+        //     .unwrap();
+        // for i in 0..chunks {
+        //     let start = Instant::now();
+        //     let rect = Rect::new(0, (lines * i) as i32, width, lines);
+        //     let pixels = &pixels[((lines * i) * width * 4) as usize
+        //         ..std::cmp::min(pixels.len() - 1, ((lines * (i + 1)) * width * 4) as usize)];
+        //     match texture.update(rect, pixels, pitch as usize) {
+        //         Ok(_) => {
+        //             println!(
+        //                 "Texture.update(): {} ms (rect: {:?}, len: {})",
+        //                 start.elapsed().as_millis(),
+        //                 rect,
+        //                 pixels.len()
+        //             );
+        //         }
+        //         Err(e) => {
+        //             return Err(format!("{}", e));
+        //         }
+        //     }
+        // }
+        self.cache.last_texture = Some(texture);
+        self.last_index = index;
+        return Ok(());
     }
 }
