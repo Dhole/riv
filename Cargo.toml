@@ -25,4 +25,4 @@ dunce = "1.0"
 version = "0.34"
 default-features = false
 features = ["image", "ttf"]
-path = "../rust-sdl2"
+# path = "../rust-sdl2"
