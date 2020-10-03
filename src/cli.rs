@@ -28,6 +28,8 @@ pub struct Args {
     pub fullscreen: bool,
     /// New base directory defaults to std::env::current_dir
     pub base_dir: PathBuf,
+    /// TODO
+    pub cmd: Option<String>,
 }
 
 /// cli sets up the command line app and parses the arguments, using clap.
@@ -67,6 +69,15 @@ pub fn cli() -> Result<Args, String> {
                 .takes_value(true)
                 .case_insensitive(true)
                 .help("Load images from a list in a text file"),
+        )
+        .arg(
+            Arg::from_usage("<command> 'Command to bind'")
+                .required(false)
+                .short("c")
+                .long("cmd")
+                .takes_value(true)
+                .case_insensitive(true)
+                .help("Bind a command to a shortcut"),
         )
         .arg(
             Arg::with_name("reverse")
@@ -167,6 +178,8 @@ pub fn cli() -> Result<Args, String> {
     let max_length = value_t!(matches, "max-number-images", usize).unwrap_or(0);
     let fullscreen = matches.is_present("fullscreen");
 
+    let cmd = matches.value_of("command");
+
     Ok(Args {
         files,
         dest_folder,
@@ -176,6 +189,7 @@ pub fn cli() -> Result<Args, String> {
         max_length,
         fullscreen,
         base_dir,
+        cmd: cmd.map(|s| s.to_string()),
     })
 }
 

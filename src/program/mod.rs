@@ -27,6 +27,7 @@ use sdl2::Sdl;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -39,6 +40,7 @@ pub struct Program<'a> {
     paths: Paths,
     ui_state: ui::State<'a>,
     sorter: Sorter,
+    cmd: Option<String>,
 }
 
 impl<'a> Program<'a> {
@@ -59,6 +61,7 @@ impl<'a> Program<'a> {
         let sort_order = args.sort_order;
         let max_length = args.max_length;
         let base_dir = args.base_dir;
+        let cmd = args.cmd;
 
         let max_viewable = max_length;
 
@@ -104,6 +107,7 @@ impl<'a> Program<'a> {
                 ..Default::default()
             },
             sorter,
+            cmd,
         })
     }
 
@@ -302,6 +306,23 @@ impl<'a> Program<'a> {
         };
         let newname = PathBuf::from(&self.paths.dest_folder).join(cur_filename);
         Ok(newname)
+    }
+
+    fn run_cmd(&self) -> Result<String, String> {
+        let path = match self.paths.current_image_path() {
+            Some(p) => p,
+            None => return Ok("no image set".to_string()),
+        };
+        let cmd = match &self.cmd {
+            Some(c) => c,
+            None => return Ok("no command set".to_string()),
+        };
+        let command = cmd.replace("{}", "'{}'");
+        let command = command.replace("{}", path.as_path().to_str().unwrap());
+        return match Command::new("/bin/sh").arg("-c").arg(&command).output() {
+            Ok(_) => Ok("ran command successfully".to_string()),
+            Err(e) => Err(format!("error running command {}: {:?}", command, e)),
+        };
     }
 
     /// Copies the current image and (n-1) next images
@@ -733,6 +754,17 @@ impl<'a> Program<'a> {
                     }
                     Err(e) => {
                         self.ui_state.mode = Mode::Error(format!("Failed to copy file: {}", e));
+                        return Ok(CompleteType::Break);
+                    }
+                },
+                Action::Cmd => match self.run_cmd() {
+                    Ok(s) => {
+                        self.ui_state.mode = Mode::Success(s);
+                        self.ui_state.rerender_time = Some(Instant::now());
+                        return Ok(CompleteType::Break);
+                    }
+                    Err(e) => {
+                        self.ui_state.mode = Mode::Error(format!("Failed to run cmd: {}", e));
                         return Ok(CompleteType::Break);
                     }
                 },

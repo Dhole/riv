@@ -56,6 +56,8 @@ pub enum Action<'a> {
     Pan(PanAction),
     /// Copy indicates the app should copy the image in response to this event
     Copy,
+    /// TODO
+    Cmd,
     /// Move indicates the app should move the image in response to this event
     Move,
     /// Delete indicates the app should delete the image in response to this event
@@ -382,6 +384,7 @@ fn event_to_action<'a>(event: &Event) -> Action<'a> {
             "K" => Action::Pan(PanAction::Up),
             "L" => Action::Pan(PanAction::Right),
             "m" => Action::Move,
+            "p" => Action::Cmd,
             "o" => Action::Zoom(ZoomAction::Out),
             "q" => Action::Quit,
             "r" => Action::Rotate(RotationDirection::Clockwise),
